@@ -123,21 +123,20 @@ import {
     return newConfig;
   };
 
-  /** Loads a given configuration into the tsParticles instance. */
-  const loadParticles = async (config) => {
-    AppState.particleState.currentConfig = config;
-    localStorage.setItem("tsDiceLastConfig", JSON.stringify(config));
-    AppState.ui.particlesContainer = await tsParticles.load({
-      id: "tsparticles",
-      options: JSON.parse(JSON.stringify(config)),
-    });
-    AppState.ui.isPaused = false;
-    UIManager.syncUI();
+  /** Applies or removes the wall collision effect based on the current state. */
+  const applyWallsMode = (config) => {
+    if (AppState.ui.areWallsOn) {
+      config.particles.move.outModes = {
+        default: "bounce",
+      };
+    } else if (config.particles.move.outModes?.default === "bounce") {
+      // Only reset if it was 'bounce'. This preserves other outModes from the config.
+      config.particles.move.outModes.default = "out";
+    }
   };
 
   /** Applies or removes the cursor particle effect based on the current state. */
-  const applyCursorMode = () => {
-    const config = AppState.particleState.currentConfig;
+  const applyCursorMode = (config) => {
     if (AppState.ui.isCursorParticle) {
       config.interactivity.modes.trail = {
         delay: 0.05,
@@ -151,6 +150,30 @@ import {
         AppState.particleState.originalInteractionModes.hover || "repulse";
       config.interactivity.events.onClick.enable = true;
     }
+  };
+
+  /** Loads a given configuration into the tsParticles instance. */
+  const loadParticles = async (config) => {
+    const newConfig = JSON.parse(JSON.stringify(config));
+
+    // Apply global toggles
+    if (!newConfig.particles.move.gravity)
+      newConfig.particles.move.gravity = {};
+    newConfig.particles.move.gravity.enable = AppState.ui.isGravityOn;
+    newConfig.particles.move.gravity.acceleration = AppState.ui.isGravityOn
+      ? 20
+      : 0;
+    applyWallsMode(newConfig);
+    applyCursorMode(newConfig);
+
+    AppState.particleState.currentConfig = newConfig;
+    localStorage.setItem("tsDiceLastConfig", JSON.stringify(newConfig));
+    AppState.ui.particlesContainer = await tsParticles.load({
+      id: "tsparticles",
+      options: newConfig,
+    });
+    AppState.ui.isPaused = false;
+    UIManager.syncUI();
   };
 
   /** Handles the logic for toggling the application's color theme. */
@@ -326,37 +349,20 @@ import {
       case BUTTON_IDS.GRAVITY:
         CommandManager.execute(
           createToggleCommand("isGravityOn", async () => {
-            const config = AppState.particleState.currentConfig;
-            config.particles.move.gravity.enable = AppState.ui.isGravityOn;
-            config.particles.move.gravity.acceleration = AppState.ui.isGravityOn
-              ? 20
-              : 0;
-            await loadParticles(config);
+            await loadParticles(AppState.particleState.currentConfig);
           })
         );
         break;
       case BUTTON_IDS.WALLS:
         CommandManager.execute(
           createToggleCommand("areWallsOn", async () => {
-            const config = AppState.particleState.currentConfig;
-            if (!config.particles) return;
-            if (AppState.ui.areWallsOn) {
-              AppState.particleState.originalOutModes = structuredClone(
-                config.particles.move.outModes
-              );
-              config.particles.move.outModes = { default: "bounce" };
-            } else {
-              config.particles.move.outModes =
-                AppState.particleState.originalOutModes;
-            }
-            await loadParticles(config);
+            await loadParticles(AppState.particleState.currentConfig);
           })
         );
         break;
       case BUTTON_IDS.CURSOR:
         CommandManager.execute(
           createToggleCommand("isCursorParticle", async () => {
-            applyCursorMode();
             await loadParticles(AppState.particleState.currentConfig);
           })
         );
