@@ -1,6 +1,6 @@
 import { tsParticles } from "@tsparticles/engine";
 import { loadAll } from "@tsparticles/all";
-import * as LZString from "lz-string";
+import LZString from "lz-string";
 import { AppState } from "./state.js";
 import { UIManager } from "./uiManager.js";
 import { ConfigGenerator } from "./configGenerator.js";

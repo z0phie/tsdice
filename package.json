@@ -1,26 +1,43 @@
 {
   "name": "tsdice",
   "version": "1.0.0",
-  "description": "A particle animation configuration generator using tsParticles",
+  "description": "A particle animation configuration generator using tsParticles - create beautiful, randomized particle animations with granular control",
   "type": "module",
+  "main": "index.html",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "clean": "rm -rf dist node_modules/.vite",
+    "serve": "vite preview --port 3000",
+    "build:production": "vite build --mode production",
+    "build:analyze": "vite build --mode production && du -sh dist/* dist/assets/*"
   },
   "repository": {
     "type": "git",
-    "url": "http://local_proxy@127.0.0.1:26931/git/z0phie/tsdice"
+    "url": "https://github.com/zophiezlan/tsdice.git"
   },
+  "bugs": {
+    "url": "https://github.com/zophiezlan/tsdice/issues"
+  },
+  "homepage": "https://tsdice.pages.dev",
   "keywords": [
     "particles",
     "animation",
     "tsparticles",
     "generator",
-    "interactive"
+    "interactive",
+    "visualization",
+    "randomizer",
+    "creative",
+    "webgl"
   ],
-  "author": "",
+  "author": "zophiezlan",
   "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
   "devDependencies": {
     "vite": "^5.4.0"
   },
