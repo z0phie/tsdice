@@ -62,7 +62,7 @@ The interface is designed to be intuitive and fun to explore.
 
 ## Getting Started (Local Development)
 
-To run this project on your local machine, simply follow these steps:
+To run this project on your local machine, follow these steps:
 
 1. **Clone the repository:**
 
@@ -76,8 +76,35 @@ To run this project on your local machine, simply follow these steps:
    cd tsdice
    ```
 
-3. **Open the `index.html` file:**
-   You can open this file directly in your web browser. No server is required as it's a self-contained HTML file with vanilla JavaScript.
+3. **Install dependencies:**
+
+   ```bash
+   npm install
+   ```
+
+4. **Run the development server:**
+
+   ```bash
+   npm run dev
+   ```
+
+   This will start a local development server (default: http://localhost:3000) with hot module replacement.
+
+5. **Build for production:**
+
+   ```bash
+   npm run build
+   ```
+
+   This will create an optimized production build in the `dist` directory.
+
+6. **Preview the production build:**
+
+   ```bash
+   npm run preview
+   ```
+
+   This will serve the production build locally for testing.
 
 ## Contributing
 
@@ -86,6 +113,8 @@ Contributions are welcome, especially for bug fixes. Please see the [CONTRIBUTIN
 ## Technologies Used
 
 - **[tsParticles](https://github.com/tsparticles/tsparticles)**: The core engine powering the particle animations.
+- **[Vite](https://vitejs.dev/)**: Modern build tool for faster development and optimized production builds.
+- **[lz-string](https://github.com/pieroxy/lz-string)**: String compression library for shareable URLs.
 - **HTML5**
 - **CSS3**
 - **JavaScript (ES6 Modules)**
