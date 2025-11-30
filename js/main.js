@@ -45,10 +45,10 @@ import {
     return emojiString;
   };
 
-  /** Creates a short URL using the spoo.me API hosted on share.ket.horse */
+  /** Creates a short URL using the spoo.me API hosted on my.ket.horse */
   async function createEmojiShortUrl(longUrl) {
     try {
-      const response = await fetch("https://share.ket.horse/emoji", {
+      const response = await fetch("https://my.ket.horse/emoji", {
         method: "POST",
         headers: {
           Accept: "application/json",
