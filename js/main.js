@@ -1,10 +1,21 @@
+/**
+ * NOTE: ES module imports from CDN do not support SRI (Subresource Integrity) hashes
+ * in the current web standards. For production use, consider using a build system
+ * to bundle and hash dependencies, or use import maps with integrity (limited browser support).
+ * CDN: Using jsdelivr.com which has good uptime and security practices.
+ */
 import { tsParticles } from "https://cdn.jsdelivr.net/npm/@tsparticles/engine@3.4.0/+esm";
 import { loadAll } from "https://cdn.jsdelivr.net/npm/@tsparticles/all@3.4.0/+esm";
 import { AppState } from "./state.js";
 import { UIManager } from "./uiManager.js";
 import { ConfigGenerator } from "./configGenerator.js";
 import { CommandManager } from "./commandManager.js";
-import { copyToClipboard, getRandomItem } from "./utils.js";
+import {
+  copyToClipboard,
+  getRandomItem,
+  deepClone,
+  isValidConfig,
+} from "./utils.js";
 import {
   emojiOptions,
   darkColorPalette,
@@ -14,6 +25,26 @@ import {
 
 // Main async function to encapsulate the entire application logic.
 (async () => {
+  // --- GLOBAL ERROR HANDLERS ---
+  window.addEventListener("error", (e) => {
+    console.error("Global error:", e.error);
+    const container = document.getElementById("toast-notification");
+    if (container) {
+      container.textContent =
+        "An unexpected error occurred. Please refresh the page.";
+      container.classList.add("show");
+    }
+  });
+
+  window.addEventListener("unhandledrejection", (e) => {
+    console.error("Unhandled promise rejection:", e.reason);
+    const container = document.getElementById("toast-notification");
+    if (container) {
+      container.textContent = "An error occurred processing your request.";
+      container.classList.add("show");
+    }
+  });
+
   // Must be called before any other tsParticles calls.
   await loadAll(tsParticles);
 
@@ -34,6 +65,33 @@ import {
   document.body.appendChild(tooltip);
 
   // --- 3. CORE LOGIC FUNCTIONS ---
+
+  /** Safely saves to localStorage with quota handling. */
+  const safeLocalStorageSet = (key, value) => {
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (e) {
+      if (e.name === "QuotaExceededError") {
+        console.warn("LocalStorage quota exceeded, clearing old data");
+        // Clear old data but keep theme preference
+        const theme = localStorage.getItem("tsDiceTheme");
+        const chaos = localStorage.getItem("tsDiceChaos");
+        localStorage.clear();
+        if (theme) localStorage.setItem("tsDiceTheme", theme);
+        if (chaos) localStorage.setItem("tsDiceChaos", chaos);
+        try {
+          localStorage.setItem(key, value);
+          return true;
+        } catch (retryErr) {
+          UIManager.showToast("Storage full. Unable to save configuration.");
+          return false;
+        }
+      }
+      console.error("LocalStorage error:", e);
+      return false;
+    }
+  };
 
   /** Generates a random string of emojis for the short URL. */
   const generateRandomEmojiString = (count) => {
@@ -154,7 +212,7 @@ import {
 
   /** Loads a given configuration into the tsParticles instance. */
   const loadParticles = async (config) => {
-    const newConfig = JSON.parse(JSON.stringify(config));
+    const newConfig = deepClone(config);
 
     // Apply global toggles
     if (!newConfig.particles.move.gravity)
@@ -167,7 +225,7 @@ import {
     applyCursorMode(newConfig);
 
     AppState.particleState.currentConfig = newConfig;
-    localStorage.setItem("tsDiceLastConfig", JSON.stringify(newConfig));
+    safeLocalStorageSet("tsDiceLastConfig", JSON.stringify(newConfig));
     AppState.ui.particlesContainer = await tsParticles.load({
       id: "tsparticles",
       options: newConfig,
@@ -179,7 +237,7 @@ import {
   /** Handles the logic for toggling the application's color theme. */
   const updateTheme = async () => {
     AppState.ui.isDarkMode = !AppState.ui.isDarkMode;
-    localStorage.setItem(
+    safeLocalStorageSet(
       "tsDiceTheme",
       AppState.ui.isDarkMode ? "dark" : "light"
     );
@@ -247,7 +305,7 @@ import {
 
   /** Factory function to create a shuffle command object. */
   const createShuffleCommand = (shuffleOptions) => {
-    const oldConfig = structuredClone(AppState.particleState.currentConfig);
+    const oldConfig = deepClone(AppState.particleState.currentConfig);
     let newConfig = null;
     return {
       async execute() {
@@ -392,7 +450,7 @@ import {
         break;
       case BUTTON_IDS.SHARE:
         (async () => {
-          const sharableConfig = structuredClone(
+          const sharableConfig = deepClone(
             AppState.particleState.currentConfig
           );
           sharableConfig.uiState = {
@@ -416,12 +474,16 @@ import {
               window.location.href.split("#")[0]
             }#config=${compressedConfig}`;
             const shortUrl = await createEmojiShortUrl(fullUrl);
-            if (shortUrl) {
-              await copyToClipboard(shortUrl);
+            const urlToCopy = shortUrl || fullUrl;
+            const copySuccess = await copyToClipboard(urlToCopy);
+
+            if (!copySuccess) {
+              UIManager.showToast("Failed to copy link to clipboard.");
+              UIManager.announce("Failed to copy link.");
+            } else if (shortUrl) {
               UIManager.showToast("Short emoji link copied!");
               UIManager.announce("Short emoji link copied!");
             } else {
-              await copyToClipboard(fullUrl);
               UIManager.showToast(
                 "Shortening failed. Full link copied instead."
               );
@@ -447,13 +509,13 @@ import {
     AppState.particleState.chaosLevel = parseInt(e.target.value, 10);
     UIManager.syncUI();
     UIManager.announce(`Chaos level ${AppState.particleState.chaosLevel}`);
-    localStorage.setItem("tsDiceChaos", AppState.particleState.chaosLevel);
+    safeLocalStorageSet("tsDiceChaos", AppState.particleState.chaosLevel);
   });
 
   /** Helper function to dismiss the welcome modal and set the timestamp. */
   const dismissWelcomeModal = () => {
     UIManager.closeModal(welcomeModal);
-    localStorage.setItem("tsDiceWelcomeTimestamp", Date.now());
+    safeLocalStorageSet("tsDiceWelcomeTimestamp", Date.now());
   };
 
   setupModal(welcomeModal, closeModalBtn, dismissWelcomeModal);
@@ -616,11 +678,29 @@ import {
       const decodedString = LZString.decompressFromEncodedURIComponent(
         window.location.hash.substring(8)
       );
-      if (decodedString) {
-        const parsedConfig = JSON.parse(decodedString);
+      if (!decodedString) {
+        throw new Error("Decompression failed");
+      }
+
+      const parsedConfig = JSON.parse(decodedString);
+
+      // Validate the configuration before using it
+      if (!isValidConfig(parsedConfig)) {
+        console.error("Invalid configuration in URL");
+        UIManager.showToast(
+          "Invalid configuration link. Using default settings."
+        );
+        window.location.hash = "";
+      } else {
         if (parsedConfig.uiState) {
+          const { chaosLevel } = parsedConfig.uiState;
+          // Validate and sanitize UI state
           AppState.particleState.chaosLevel =
-            parsedConfig.uiState.chaosLevel || 5;
+            typeof chaosLevel === "number" &&
+            chaosLevel >= 1 &&
+            chaosLevel <= 10
+              ? chaosLevel
+              : 5;
           AppState.ui.isDarkMode = parsedConfig.uiState.isDarkMode !== false;
           AppState.ui.isCursorParticle =
             !!parsedConfig.uiState.isCursorParticle;
@@ -632,10 +712,10 @@ import {
           delete parsedConfig.uiState;
         }
         AppState.particleState.initialConfigFromUrl = parsedConfig;
-      } else {
-        throw new Error("Decompression failed");
       }
     } catch (e) {
+      console.error("Error loading config from URL:", e);
+      UIManager.showToast("Failed to load configuration from URL.");
       window.location.hash = "";
     }
   }
