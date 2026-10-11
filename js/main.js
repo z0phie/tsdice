@@ -1,5 +1,5 @@
-import { tsParticles } from "https://cdn.jsdelivr.net/npm/@tsparticles/engine@3.4.0/+esm";
-import { loadAll } from "https://cdn.jsdelivr.net/npm/@tsparticles/all@3.4.0/+esm";
+import { tsParticles } from "https://cdn.jsdelivr.net/npm/@tsparticles/engine@3.9.1/+esm";
+import { loadAll } from "https://cdn.jsdelivr.net/npm/@tsparticles/all@3.9.1/+esm";
 import { AppState } from "./state.js";
 import { UIManager } from "./uiManager.js";
 import { ConfigGenerator } from "./configGenerator.js";
@@ -145,7 +145,10 @@ import {
       };
       config.interactivity.events.onHover.mode = "trail";
       config.interactivity.events.onClick.enable = false;
-    } else {
+    } else if (config.interactivity.events.onHover.mode === "trail") {
+      // "trail" on hover only ever comes from cursor mode, so only restore in
+      // that case. Otherwise leave the scene's own hover mode alone, so undo,
+      // saved scenes and shared links keep the effect they were created with.
       config.interactivity.events.onHover.mode =
         AppState.particleState.originalInteractionModes.hover || "repulse";
       config.interactivity.events.onClick.enable = true;
@@ -199,10 +202,10 @@ import {
     config.background.color.value = AppState.ui.isDarkMode ? "#111" : "#f0f0f0";
     if (config.particles.color.value !== "random")
       config.particles.color.value = getRandomItem(newPalette);
-    if (config.particles.links.enable)
-      config.particles.links.color.value = AppState.ui.isDarkMode
-        ? "#ffffff"
-        : "#333333";
+    // Always recolour links: the "grab" hover mode draws with this colour too.
+    config.particles.links.color.value = AppState.ui.isDarkMode
+      ? "#ffffff"
+      : "#333333";
     if (config.particles.move.trail.enable)
       config.particles.move.trail.fill.color.value = AppState.ui.isDarkMode
         ? "#111"
@@ -247,11 +250,15 @@ import {
 
   /** Factory function to create a shuffle command object. */
   const createShuffleCommand = (shuffleOptions) => {
-    const oldConfig = structuredClone(AppState.particleState.currentConfig);
+    let oldConfig = null;
     let newConfig = null;
     return {
       async execute() {
-        if (!newConfig) newConfig = buildConfig(shuffleOptions);
+        // Snapshot on first run, not creation: queued commands may run later.
+        if (!newConfig) {
+          oldConfig = structuredClone(AppState.particleState.currentConfig);
+          newConfig = buildConfig(shuffleOptions);
+        }
         await loadParticles(newConfig);
         UIManager.announce("New scene generated.");
       },
@@ -319,7 +326,8 @@ import {
   /** Main event listener for the control panel, using event delegation for performance. */
   subMenu.addEventListener("click", (e) => {
     const button = e.target.closest(".menu-button");
-    if (!button) return;
+    // Keyboard shortcuts call .click() directly, bypassing pointer-events: none.
+    if (!button || button.classList.contains("disabled")) return;
 
     switch (button.id) {
       case BUTTON_IDS.SHUFFLE_ALL:
@@ -571,25 +579,29 @@ import {
       return;
     }
     if (e.altKey && !e.ctrlKey && !e.metaKey) {
-      e.preventDefault();
+      // Match on the physical key (e.code): on macOS, Option+A yields e.key "å".
       const btnId = {
-        m: BUTTON_IDS.MAIN_MENU,
-        a: BUTTON_IDS.SHUFFLE_ALL,
-        p: BUTTON_IDS.SHUFFLE_APPEARANCE,
-        v: BUTTON_IDS.SHUFFLE_MOVEMENT,
-        i: BUTTON_IDS.SHUFFLE_INTERACTION,
-        f: BUTTON_IDS.SHUFFLE_FX,
-        g: BUTTON_IDS.GRAVITY,
-        w: BUTTON_IDS.WALLS,
-        t: BUTTON_IDS.THEME,
-        c: BUTTON_IDS.CURSOR,
-        s: BUTTON_IDS.SHARE,
-        "?": BUTTON_IDS.INFO,
-        r: BUTTON_IDS.REFRESH,
-        z: BUTTON_IDS.BACK,
-        y: BUTTON_IDS.FORWARD,
-      }[e.key.toLowerCase()];
-      if (btnId) document.getElementById(btnId)?.click();
+        KeyM: BUTTON_IDS.MAIN_MENU,
+        KeyA: BUTTON_IDS.SHUFFLE_ALL,
+        KeyP: BUTTON_IDS.SHUFFLE_APPEARANCE,
+        KeyV: BUTTON_IDS.SHUFFLE_MOVEMENT,
+        KeyI: BUTTON_IDS.SHUFFLE_INTERACTION,
+        KeyF: BUTTON_IDS.SHUFFLE_FX,
+        KeyG: BUTTON_IDS.GRAVITY,
+        KeyW: BUTTON_IDS.WALLS,
+        KeyT: BUTTON_IDS.THEME,
+        KeyC: BUTTON_IDS.CURSOR,
+        KeyS: BUTTON_IDS.SHARE,
+        Slash: BUTTON_IDS.INFO,
+        KeyR: BUTTON_IDS.REFRESH,
+        KeyZ: BUTTON_IDS.BACK,
+        KeyY: BUTTON_IDS.FORWARD,
+      }[e.code];
+      // Only swallow Alt combos we handle, so browser/OS shortcuts keep working.
+      if (btnId) {
+        e.preventDefault();
+        document.getElementById(btnId)?.click();
+      }
     }
   });
 
