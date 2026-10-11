@@ -246,6 +246,15 @@ import {
     }
   };
 
+  /** Persists the scene toggles so a refresh restores them with the scene. */
+  const saveToggles = () => {
+    const { isGravityOn, areWallsOn, isCursorParticle } = AppState.ui;
+    localStorage.setItem(
+      "tsDiceToggles",
+      JSON.stringify({ isGravityOn, areWallsOn, isCursorParticle })
+    );
+  };
+
   // --- 4. COMMAND PATTERN IMPLEMENTATION ---
 
   /** Factory function to create a shuffle command object. */
@@ -272,6 +281,7 @@ import {
   const createToggleCommand = (stateKey, applyFn) => ({
     async execute() {
       AppState.ui[stateKey] = !AppState.ui[stateKey];
+      saveToggles();
       await applyFn();
       const stateName = stateKey
         .replace("is", "")
@@ -409,9 +419,6 @@ import {
             isCursorParticle: AppState.ui.isCursorParticle,
             isGravityOn: AppState.ui.isGravityOn,
             areWallsOn: AppState.ui.areWallsOn,
-            originalOutModes: AppState.ui.areWallsOn
-              ? AppState.particleState.originalOutModes
-              : undefined,
           };
           try {
             button.classList.add("disabled");
@@ -613,6 +620,17 @@ import {
   const savedChaos = localStorage.getItem("tsDiceChaos");
   AppState.particleState.chaosLevel = savedChaos ? parseInt(savedChaos, 10) : 5;
 
+  try {
+    const savedToggles = JSON.parse(localStorage.getItem("tsDiceToggles"));
+    if (savedToggles) {
+      AppState.ui.isGravityOn = !!savedToggles.isGravityOn;
+      AppState.ui.areWallsOn = !!savedToggles.areWallsOn;
+      AppState.ui.isCursorParticle = !!savedToggles.isCursorParticle;
+    }
+  } catch (e) {
+    localStorage.removeItem("tsDiceToggles");
+  }
+
   let initialConfigFromStorage = null;
   try {
     const savedConfigString = localStorage.getItem("tsDiceLastConfig");
@@ -638,9 +656,17 @@ import {
             !!parsedConfig.uiState.isCursorParticle;
           AppState.ui.isGravityOn = !!parsedConfig.uiState.isGravityOn;
           AppState.ui.areWallsOn = !!parsedConfig.uiState.areWallsOn;
-          if (AppState.ui.areWallsOn)
-            AppState.particleState.originalOutModes =
-              parsedConfig.uiState.originalOutModes;
+          // Persist the shared settings like a local change, so a refresh
+          // restores the same scene rather than mixing in older settings.
+          localStorage.setItem(
+            "tsDiceTheme",
+            AppState.ui.isDarkMode ? "dark" : "light"
+          );
+          localStorage.setItem(
+            "tsDiceChaos",
+            AppState.particleState.chaosLevel
+          );
+          saveToggles();
           delete parsedConfig.uiState;
         }
         AppState.particleState.initialConfigFromUrl = parsedConfig;
@@ -648,8 +674,16 @@ import {
         throw new Error("Decompression failed");
       }
     } catch (e) {
-      window.location.hash = "";
+      console.error("Could not load config from shared link.", e);
     }
+    // Drop the shared config from the address bar once read. The scene is saved
+    // to localStorage on load, so a refresh keeps any changes made since, and
+    // the original link still works when bookmarked or reopened.
+    history.replaceState(
+      null,
+      "",
+      window.location.pathname + window.location.search
+    );
   }
 
   let configToLoad =

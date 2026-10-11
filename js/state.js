@@ -16,7 +16,6 @@ export const AppState = {
     chaosLevel: 5,
     currentConfig: {},
     originalInteractionModes: {},
-    originalOutModes: {},
     initialConfigFromUrl: null,
   },
 };
